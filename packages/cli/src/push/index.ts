@@ -113,7 +113,10 @@ export class Push extends TypedEmitter<PushEvents> {
 		if (!pushRef) {
 			connectionError = 'The query parameter "pushRef" is missing!';
 		} else if (inProduction) {
-			const validation = validateOriginHeaders(headers);
+			const allowedHosts = this.config.allowedHosts
+				? this.config.allowedHosts.split(',').map((h) => h.trim()).filter(Boolean)
+				: [];
+			const validation = validateOriginHeaders(headers, allowedHosts);
 			if (!validation.isValid) {
 				this.logger.warn(
 					'Origin header does NOT match the expected origin. ' +

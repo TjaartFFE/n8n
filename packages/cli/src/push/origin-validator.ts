@@ -14,9 +14,15 @@ export interface OriginValidationResult {
  * Handles X-Forwarded-Host, X-Forwarded-Proto, and RFC 7239 Forwarded headers.
  *
  * @param headers HTTP request headers
+ * @param allowedHosts Optional list of hostnames that are explicitly trusted,
+ *   bypassing the proxy-header check. Useful when the reverse proxy does not
+ *   forward host headers correctly (e.g. ffe.app.n8n.cloud).
  * @returns Validation result with details about the origin check
  */
-export function validateOriginHeaders(headers: Request['headers']): OriginValidationResult {
+export function validateOriginHeaders(
+	headers: Request['headers'],
+	allowedHosts: string[] = [],
+): OriginValidationResult {
 	// Parse and normalize the origin using native URL class
 	const originInfo = parseOrigin(headers.origin ?? '');
 
@@ -24,6 +30,14 @@ export function validateOriginHeaders(headers: Request['headers']): OriginValida
 		return {
 			isValid: false,
 			error: 'Origin header is missing or malformed',
+		};
+	}
+
+	// If the origin host is in the explicit allow-list, skip proxy-header checks
+	if (allowedHosts.length > 0 && allowedHosts.includes(originInfo.host)) {
+		return {
+			isValid: true,
+			originInfo,
 		};
 	}
 
