@@ -503,7 +503,7 @@ function _buildProducerXlsx(templateBuf, producerKey, varieties, exportWeek, shi
     const vi=VARIETIES[variety], counts=COUNT_COLUMNS[vi.countType], lc=counts.length;
     for(const mktCode of markets) {
       const mi=MARKETS[mktCode]||{region:'?',country:mktCode,invCode:'WR',label:'',pallet:'HQ'};
-      const {dipC1,dipC2}=getPriceDisplay(mktCode+'|'+variety,useCurrency);
+      const {dipC1,dipC2}=getPriceDisplay(mktCode+'|'+variety,useCurrency,priceLookup);
       const r0=cur;
 
       // Row offset 0: Variety / region / country / market header
@@ -609,6 +609,28 @@ function _buildProducerXlsx(templateBuf, producerKey, varieties, exportWeek, shi
 }
 
 
+// ---- MODULE-SCOPE HELPERS (used by _buildProducerXlsx above) ----
+
+function _parseMoney(v) {
+  const s = String(v||'').replace(/[^\d.\-]/g, '');
+  const n = parseFloat(s);
+  return (isNaN(n) || n < 0) ? 0 : n;
+}
+
+function getPriceDisplay(k, useCurrency, priceLookup) {
+  const p = priceLookup[k];
+  if (!p) return {dipC1:'',dipC2:''};
+  if (useCurrency) {
+    const c1l=Math.min(...p.fxC1Ls), c1h=Math.max(...p.fxC1Hs);
+    const c2l=p.fxC2Ls.length?Math.min(...p.fxC2Ls):0, c2h=p.fxC2Hs.length?Math.max(...p.fxC2Hs):0;
+    return {dipC1:c1l.toFixed(2)+' \u2013 '+c1h.toFixed(2), dipC2:c2l>0?c2l.toFixed(2)+' \u2013 '+c2h.toFixed(2):''};
+  } else {
+    const c1=p.randC1s.length?p.randC1s.reduce((a,b)=>a+b)/p.randC1s.length:0;
+    const c2=p.randC2s.length?p.randC2s.reduce((a,b)=>a+b)/p.randC2s.length:0;
+    return {dipC1:c1>0?'R '+c1.toFixed(2):'', dipC2:c2>0?'R '+c2.toFixed(2):''};
+  }
+}
+
 // ---- EXPORTED FUNCTION ----
 
 /**
@@ -653,13 +675,6 @@ export function generatePackPlans(pakvolumesB64, markpryseB64) {
   // ---- PARSE MARKPRYSE DATA (Markpryse: 'DATA' sheet) ----
   const dataRows = _readXlsxSheet(markpryseBuffer, 'DATA');
 
-  // Strip currency symbols/spaces and parse as float (handles £10.30, R245.11, "R-", numbers)
-  function _parseMoney(v) {
-    const s = String(v||'').replace(/[^\d.\-]/g, '');
-    const n = parseFloat(s);
-    return (isNaN(n) || n < 0) ? 0 : n;
-  }
-
   const priceLookup = {};
   for (let i = 1; i < dataRows.length; i++) {
     const row = dataRows[i] || [];
@@ -681,20 +696,6 @@ export function generatePackPlans(pakvolumesB64, markpryseB64) {
     if (randC1>0) priceLookup[k].randC1s.push(randC1);
     if (randC2>0) priceLookup[k].randC2s.push(randC2);
   }
-  function getPriceDisplay(k, useCurrency) {
-    const p = priceLookup[k];
-    if (!p) return {dipC1:'',dipC2:''};
-    if (useCurrency) {
-      const c1l=Math.min(...p.fxC1Ls), c1h=Math.max(...p.fxC1Hs);
-      const c2l=p.fxC2Ls.length?Math.min(...p.fxC2Ls):0, c2h=p.fxC2Hs.length?Math.max(...p.fxC2Hs):0;
-      return {dipC1:c1l.toFixed(2)+' \u2013 '+c1h.toFixed(2), dipC2:c2l>0?c2l.toFixed(2)+' \u2013 '+c2h.toFixed(2):''};
-    } else {
-      const c1=p.randC1s.length?p.randC1s.reduce((a,b)=>a+b)/p.randC1s.length:0;
-      const c2=p.randC2s.length?p.randC2s.reduce((a,b)=>a+b)/p.randC2s.length:0;
-      return {dipC1:c1>0?'R '+c1.toFixed(2):'', dipC2:c2>0?'R '+c2.toFixed(2):''};
-    }
-  }
-
   // ---- GENERATE XLSX PER PRODUCER PER VARIETY ----
   // One file per producer+variety so that NSC / SC / GF count columns
   // never mix in the same sheet (different column sets per count type).
