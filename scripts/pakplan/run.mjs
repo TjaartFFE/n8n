@@ -23,13 +23,10 @@ import { generatePackPlans } from './generator.mjs';
 // Configuration
 // ---------------------------------------------------------------------------
 
-// Graph API file download — uses Sites.Read.All (Microsoft Graph), no SharePoint-specific token needed.
-// The default drive for a SharePoint site maps to the "Documents" (Shared Documents) library,
-// so the file path starts one level below "Shared Documents".
-const GRAPH_BASE = 'https://graph.microsoft.com/v1.0/sites/ffesa.sharepoint.com:/sites/FFEPublicData/drive/root:';
-
-const PAKVOLUMES_URL = `${GRAPH_BASE}/FFE%20Bemarking/LIVE/Pakvolumes%20LIVE%202026.xlsm:/content`;
-const MARKPRYSE_URL  = `${GRAPH_BASE}/FFE%20Bemarking/LIVE/Markpryse%20LIVE%202026.xlsm:/content`;
+const GRAPH_SITE_PATH = 'https://graph.microsoft.com/v1.0/sites/ffesa.sharepoint.com:/sites/FFEPublicData';
+const PAKVOLUMES_FILENAME = 'Pakvolumes LIVE 2026.xlsm';
+const MARKPRYSE_FILENAME  = 'Markpryse LIVE 2026.xlsm';
+const SP_FOLDER = 'FFE Bemarking/LIVE';   // path inside the document library
 
 const REQUIRED_VARS = ['AZURE_TENANT_ID', 'AZURE_CLIENT_ID', 'AZURE_CLIENT_SECRET'];
 
@@ -209,11 +206,33 @@ async function main() {
   );
   console.log('  Token acquired');
 
-  // 2. Download source Excel files via Graph API (requires Sites.Read.All on Microsoft Graph)
+  // 2. Resolve site ID then discover drives (avoids chained path-notation issue in Graph API)
+  console.log('Resolving SharePoint site...');
+  const siteJson = JSON.parse((await httpsGet(GRAPH_SITE_PATH, { Authorization: `Bearer ${graphToken}` })).toString('utf8'));
+  const siteId = siteJson.id;
+  console.log(`  Site ID: ${siteId}`);
+
+  const drivesJson = JSON.parse((await httpsGet(
+    `https://graph.microsoft.com/v1.0/sites/${siteId}/drives`,
+    { Authorization: `Bearer ${graphToken}` },
+  )).toString('utf8'));
+  const drives = drivesJson.value || [];
+  console.log(`  Drives: ${drives.map((d) => d.name).join(', ')}`);
+
+  const drive = drives.find((d) => d.name === 'Documents') ?? drives[0];
+  if (!drive) throw new Error('No drives found on SharePoint site');
+  console.log(`  Using drive: "${drive.name}" (${drive.id})`);
+
+  // 3. Download source Excel files in parallel using the resolved drive ID
   console.log('Downloading source files from SharePoint...');
+  function fileUrl(filename) {
+    return `https://graph.microsoft.com/v1.0/drives/${drive.id}/root:/${
+      encodeURIComponent(SP_FOLDER).replace(/%2F/g, '/')
+    }/${encodeURIComponent(filename)}:/content`;
+  }
   const [pakvolBuf, markpryseBuf] = await Promise.all([
-    httpsGet(PAKVOLUMES_URL, { Authorization: `Bearer ${graphToken}` }),
-    httpsGet(MARKPRYSE_URL,  { Authorization: `Bearer ${graphToken}` }),
+    httpsGet(fileUrl(PAKVOLUMES_FILENAME), { Authorization: `Bearer ${graphToken}` }),
+    httpsGet(fileUrl(MARKPRYSE_FILENAME),  { Authorization: `Bearer ${graphToken}` }),
   ]);
   console.log(`  Pakvolumes : ${pakvolBuf.length.toLocaleString()} bytes`);
   console.log(`  Markpryse  : ${markpryseBuf.length.toLocaleString()} bytes`);
