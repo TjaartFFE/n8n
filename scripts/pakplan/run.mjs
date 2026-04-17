@@ -23,15 +23,13 @@ import { generatePackPlans } from './generator.mjs';
 // Configuration
 // ---------------------------------------------------------------------------
 
-// Graph API file download — uses Sites.Read.All (Microsoft Graph), no SharePoint-specific token needed
-const GRAPH_SITE = 'ffesa.sharepoint.com:/sites/FFEPublicData:';
-const GRAPH_FOLDER = 'Shared Documents/FFE Bemarking/LIVE';
+// Graph API file download — uses Sites.Read.All (Microsoft Graph), no SharePoint-specific token needed.
+// The default drive for a SharePoint site maps to the "Documents" (Shared Documents) library,
+// so the file path starts one level below "Shared Documents".
+const GRAPH_BASE = 'https://graph.microsoft.com/v1.0/sites/ffesa.sharepoint.com:/sites/FFEPublicData/drive/root:';
 
-const PAKVOLUMES_URL =
-  `https://graph.microsoft.com/v1.0/sites/${GRAPH_SITE}/drive/root:/${GRAPH_FOLDER}/Pakvolumes LIVE 2026.xlsm:/content`;
-
-const MARKPRYSE_URL =
-  `https://graph.microsoft.com/v1.0/sites/${GRAPH_SITE}/drive/root:/${GRAPH_FOLDER}/Markpryse LIVE 2026.xlsm:/content`;
+const PAKVOLUMES_URL = `${GRAPH_BASE}/FFE%20Bemarking/LIVE/Pakvolumes%20LIVE%202026.xlsm:/content`;
+const MARKPRYSE_URL  = `${GRAPH_BASE}/FFE%20Bemarking/LIVE/Markpryse%20LIVE%202026.xlsm:/content`;
 
 const REQUIRED_VARS = ['AZURE_TENANT_ID', 'AZURE_CLIENT_ID', 'AZURE_CLIENT_SECRET'];
 
