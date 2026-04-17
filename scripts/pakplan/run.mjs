@@ -5,10 +5,9 @@
 // Excel pack-plan files, and emails results via Microsoft Graph.
 //
 // Authentication: Azure AD client credentials (no user login required).
-// The registered app needs:
-//   • SharePoint API  → Sites.Read.All  (Application permission)
-//   • Microsoft Graph → Mail.Send       (Application permission)
-// Both permissions require admin consent.
+// The registered app needs (Microsoft Graph Application permissions, admin consent):
+//   • Sites.Read.All  (or Sites.ReadWrite.All) — to download SharePoint files via Graph
+//   • Mail.Send                                — to send email
 //
 // Usage:
 //   node scripts/pakplan/run.mjs
@@ -24,15 +23,15 @@ import { generatePackPlans } from './generator.mjs';
 // Configuration
 // ---------------------------------------------------------------------------
 
-const SHAREPOINT_HOST = 'ffesa.sharepoint.com';
+// Graph API file download — uses Sites.Read.All (Microsoft Graph), no SharePoint-specific token needed
+const GRAPH_SITE = 'ffesa.sharepoint.com:/sites/FFEPublicData:';
+const GRAPH_FOLDER = 'Shared Documents/FFE Bemarking/LIVE';
 
 const PAKVOLUMES_URL =
-  "https://ffesa.sharepoint.com/sites/FFEPublicData/_api/web/GetFileByServerRelativeUrl" +
-  "('/sites/FFEPublicData/Shared%20Documents/FFE%20Bemarking/LIVE/Pakvolumes%20LIVE%202026.xlsm')/$value";
+  `https://graph.microsoft.com/v1.0/sites/${GRAPH_SITE}/drive/root:/${GRAPH_FOLDER}/Pakvolumes LIVE 2026.xlsm:/content`;
 
 const MARKPRYSE_URL =
-  "https://ffesa.sharepoint.com/sites/FFEPublicData/_api/web/GetFileByServerRelativeUrl" +
-  "('/sites/FFEPublicData/Shared%20Documents/FFE%20Bemarking/LIVE/Markpryse%20LIVE%202026.xlsm')/$value";
+  `https://graph.microsoft.com/v1.0/sites/${GRAPH_SITE}/drive/root:/${GRAPH_FOLDER}/Markpryse LIVE 2026.xlsm:/content`;
 
 const REQUIRED_VARS = ['AZURE_TENANT_ID', 'AZURE_CLIENT_ID', 'AZURE_CLIENT_SECRET'];
 
@@ -204,21 +203,19 @@ async function main() {
     PAKPLAN_DRY_RUN,
   } = process.env;
 
-  // 1. Fetch tokens in parallel (SharePoint + Graph use separate scopes)
-  console.log('Fetching auth tokens...');
-  const [spToken, graphToken] = await Promise.all([
-    fetchToken(AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET,
-               `https://${SHAREPOINT_HOST}/.default`),
-    fetchToken(AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET,
-               'https://graph.microsoft.com/.default'),
-  ]);
-  console.log('  Tokens acquired');
+  // 1. Fetch single Graph token (used for both file downloads and email)
+  console.log('Fetching auth token...');
+  const graphToken = await fetchToken(
+    AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET,
+    'https://graph.microsoft.com/.default',
+  );
+  console.log('  Token acquired');
 
-  // 2. Download source Excel files in parallel
+  // 2. Download source Excel files via Graph API (requires Sites.Read.All on Microsoft Graph)
   console.log('Downloading source files from SharePoint...');
   const [pakvolBuf, markpryseBuf] = await Promise.all([
-    httpsGet(PAKVOLUMES_URL, { Authorization: `Bearer ${spToken}` }),
-    httpsGet(MARKPRYSE_URL,  { Authorization: `Bearer ${spToken}` }),
+    httpsGet(PAKVOLUMES_URL, { Authorization: `Bearer ${graphToken}` }),
+    httpsGet(MARKPRYSE_URL,  { Authorization: `Bearer ${graphToken}` }),
   ]);
   console.log(`  Pakvolumes : ${pakvolBuf.length.toLocaleString()} bytes`);
   console.log(`  Markpryse  : ${markpryseBuf.length.toLocaleString()} bytes`);

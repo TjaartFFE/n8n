@@ -23,9 +23,9 @@ AZURE_CLIENT_SECRET=<client-secret>
 PAKPLAN_SEND_AS=tjaart@ffesa.co.za   # mailbox to send from
 ```
 
-The Azure AD app needs **Application** permissions (admin consent required):
-- **SharePoint API**: `Sites.Read.All`
-- **Microsoft Graph**: `Mail.Send`
+The Azure AD app needs **Microsoft Graph Application** permissions (admin consent required):
+- `Sites.Read.All` (or `Sites.ReadWrite.All`) — downloads files from SharePoint via Graph
+- `Mail.Send` — sends email
 
 ## Steps
 
